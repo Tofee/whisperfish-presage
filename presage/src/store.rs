@@ -2,6 +2,7 @@
 
 use std::{fmt, future::Future, ops::RangeBounds, time::SystemTime};
 
+use crate::ThreadMetadata;
 use libsignal_service::{
     content::{ContentBody, Metadata},
     groups_v2::Timer,
@@ -74,6 +75,11 @@ pub trait ContentsStore: Send + Sync {
     /// Each items is a tuple consisting of the group master key and its corresponding data.
     type GroupsIter: Iterator<Item = Result<(GroupMasterKeyBytes, Group), Self::ContentsStoreError>>;
 
+    /// Iterator over all stored thread metadata
+    ///
+    /// Each item is a tuple consisting of the thread and its corresponding metadata.
+    type ThreadMetadataIter: Iterator<Item = Result<ThreadMetadata, Self::ContentsStoreError>>;
+
     /// Iterator over all stored messages
     type MessagesIter: Iterator<Item = Result<Content, Self::ContentsStoreError>>;
 
@@ -133,17 +139,17 @@ pub trait ContentsStore: Send + Sync {
         thread: &Thread,
     ) -> impl Future<Output = Result<Option<(u32, u32)>, Self::ContentsStoreError>> {
         async move {
-            match thread {
-                Thread::Contact(uuid) => Ok(self
+        match thread {
+            Thread::Contact(uuid) => Ok(self
                     .contact_by_id(uuid)
                     .await?
-                    .map(|c| (c.expire_timer, c.expire_timer_version))),
-                Thread::Group(key) => Ok(self
+                .map(|c| (c.expire_timer, c.expire_timer_version))),
+            Thread::Group(key) => Ok(self
                     .group(*key)
                     .await?
-                    .and_then(|g| g.disappearing_messages_timer)
-                    // TODO: most likely we can have versions here
-                    .map(|t| (t.duration, 1))), // Groups do not have expire_timer_version
+                .and_then(|g| g.disappearing_messages_timer)
+                // TODO: most likely we can have versions here
+                .map(|t| (t.duration, 1))), // Groups do not have expire_timer_version
             }
         }
     }
@@ -158,27 +164,27 @@ pub trait ContentsStore: Send + Sync {
     ) -> impl Future<Output = Result<(), Self::ContentsStoreError>> {
         async move {
             trace!(%thread, timer, version, "updating expire timer");
-            match thread {
-                Thread::Contact(uuid) => {
+        match thread {
+            Thread::Contact(uuid) => {
                     let contact = self.contact_by_id(uuid).await?;
-                    if let Some(mut contact) = contact {
-                        let current_version = contact.expire_timer_version;
-                        if version <= current_version {
-                            return Ok(());
-                        }
-                        contact.expire_timer_version = version;
-                        contact.expire_timer = timer;
+                if let Some(mut contact) = contact {
+                    let current_version = contact.expire_timer_version;
+                    if version <= current_version {
+                        return Ok(());
+                    }
+                    contact.expire_timer_version = version;
+                    contact.expire_timer = timer;
                         self.save_contact(&contact).await?;
-                    }
-                    Ok(())
                 }
-                Thread::Group(key) => {
+                Ok(())
+            }
+            Thread::Group(key) => {
                     let group = self.group(*key).await?;
-                    if let Some(mut g) = group {
-                        g.disappearing_messages_timer = Some(Timer { duration: timer });
+                if let Some(mut g) = group {
+                    g.disappearing_messages_timer = Some(Timer { duration: timer });
                         self.save_group(*key, g).await?;
-                    }
-                    Ok(())
+                }
+                Ok(())
                 }
             }
         }
@@ -260,6 +266,22 @@ pub trait ContentsStore: Send + Sync {
         key: ProfileKey,
         profile: Profile,
     ) -> impl Future<Output = Result<(), Self::ContentsStoreError>>;
+  
+    /// Retrieve ThereadMetadata for all threads.
+    fn thread_metadatas(&self) -> Result<Self::ThreadMetadataIter, Self::ContentsStoreError>;
+
+    /// Retrieve ThereadMetadata for a single thread.
+    fn thread_metadata(
+        &self,
+        thread: Thread,
+    ) -> Result<Option<ThreadMetadata>, Self::ContentsStoreError>;
+
+    /// Save ThereadMetadata for a single thread.
+    /// This will overwrite any existing metadata for the thread.
+    fn save_thread_metadata(
+        &mut self,
+        metadata: ThreadMetadata,
+    ) -> Result<(), Self::ContentsStoreError>;
 
     /// Retrieve a profile by [Uuid] and [ProfileKey].
     fn profile(

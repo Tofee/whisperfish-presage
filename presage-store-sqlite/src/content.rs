@@ -2,6 +2,7 @@ use std::ops::{Bound, RangeBounds};
 
 use presage::{
     AvatarBytes,
+    ThreadMetadata,
     libsignal_service::{
         Profile,
         content::Metadata,
@@ -26,6 +27,8 @@ impl ContentsStore for SqliteStore {
 
     type GroupsIter =
         Box<dyn Iterator<Item = Result<(GroupMasterKeyBytes, Group), Self::ContentsStoreError>>>;
+
+    type ThreadMetadataIter = Box<dyn Iterator<Item = Result<ThreadMetadata, Self::ContentsStoreError>>>;
 
     type MessagesIter = Box<dyn Iterator<Item = Result<Content, Self::ContentsStoreError>>>;
 
@@ -609,6 +612,28 @@ impl ContentsStore for SqliteStore {
         .fetch_all(&self.db)
         .await?;
         Ok(Box::new(sql_packs.into_iter().map(|pack| Ok(pack.into()))))
+    }
+    
+    /// Retrieve ThereadMetadata for all threads.
+    fn thread_metadatas(&self) -> Result<Self::ThreadMetadataIter, Self::ContentsStoreError> {
+        todo!()
+    }
+
+    /// Retrieve ThereadMetadata for a single thread.
+    fn thread_metadata(
+        &self,
+        _thread: Thread,
+    ) -> Result<Option<ThreadMetadata>, Self::ContentsStoreError> {
+        todo!()
+    }
+
+    /// Save ThereadMetadata for a single thread.
+    /// This will overwrite any existing metadata for the thread.
+    fn save_thread_metadata(
+        &mut self,
+        _metadata: ThreadMetadata,
+    ) -> Result<(), Self::ContentsStoreError> {
+        todo!()
     }
 }
 

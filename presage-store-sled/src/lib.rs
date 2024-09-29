@@ -17,7 +17,7 @@ use presage::{
     },
     manager::RegistrationData,
     model::identity::OnNewIdentity,
-    store::{ContentsStore, StateStore, Store},
+    store::{ContentsStore, StateStore, Store, Thread},
 };
 use protocol::{AciSledStore, PniSledStore, SledProtocolStore, SledTrees};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -302,6 +302,13 @@ impl SledStore {
         self.insert(SLED_TREE_STATE, T::identity_keypair(), key_base64)?;
         Ok(())
     }
+    
+    fn thread_metadata_key(&self, thread: Thread) -> Vec<u8> {
+        match thread {
+            Thread::Contact(contact) => contact.to_string().into_bytes(),
+            Thread::Group(group) => group.to_vec(),
+        }
+    }
 }
 
 async fn migrate(
@@ -366,8 +373,8 @@ async fn migrate(
                         if let Some(data) = registration_data {
                             store
                                 .set_aci_identity_key_pair(IdentityKeyPair::new(
-                                    data.aci_public_key,
-                                    data.aci_private_key,
+                                data.aci_public_key,
+                                data.aci_private_key,
                                 ))
                                 .await?;
                             if let Some((public_key, private_key)) =
@@ -375,8 +382,8 @@ async fn migrate(
                             {
                                 store
                                     .set_pni_identity_key_pair(IdentityKeyPair::new(
-                                        public_key,
-                                        private_key,
+                                    public_key,
+                                    private_key,
                                     ))
                                     .await?;
                             }
